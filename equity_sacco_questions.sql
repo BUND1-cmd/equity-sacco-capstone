@@ -29,7 +29,7 @@ select loan_type,
      sum(principal_kes) as total_principal_kes,
      count(loan_id) as number_of_loans
 from loans
-group by loan_type,loan_id
+group by loan_type
 order by total_principal_kes desc
 
 -- ============================================================
@@ -82,7 +82,15 @@ having repayment_rate_pct <30
 --          total_expenditure_kes, net_profit_kes
 -- Order by month_number ascending.
 -- Hint: Use CASE WHEN inside SUM, GROUP BY MONTH(entry_date)
-
+select 
+   month(entry_date) as month_number,
+   monthname(entry_date),
+   sum(case when entry_type in("income")then amount_kes else 0 end) as total_income_kes,
+   sum(case when entry_type in ("expenditure")then amount_kes else 0 end) as total_expenditure_kes,
+   ((sum(case when entry_type in("income")then amount_kes else 0 end))-(sum(case when entry_type in ("expenditure")then amount_kes else 0 end))) as net_profit
+from income_expenditure
+group by month(entry_date),monthname(entry_date)
+order by month_number
 
 -- ============================================================
 -- Q6: LARGE TRANSACTION AUDIT FLAG
@@ -93,6 +101,18 @@ having repayment_rate_pct <30
 --          amount_kes, transaction_date, channel, description
 -- Order by amount_kes descending.
 -- Hint: JOIN transactions → accounts → members
+select transactions.transaction_id,
+       accounts.account_number,
+       members.full_name,
+       transactions.amount_kes,
+       transactions.transaction_date,
+       transactions.channel,
+       transactions.description
+from transactions
+join accounts on transactions.account_id = accounts.account_id
+join members on accounts.member_id = members.member_id
+where transactions.amount_kes >100000
+order by transactions.amount_kes desc
 
 
 -- ============================================================
@@ -103,6 +123,14 @@ having repayment_rate_pct <30
 -- A ratio above 80% is a liquidity warning for SACCOs.
 -- Display: total_loans_kes, total_deposits_kes, ldr_ratio_pct
 -- Hint: Use two subqueries in a single SELECT
+SELECT
+    (SELECT SUM(principal_kes) FROM loans) AS total_loans_kes,
+    (SELECT SUM(balance_ke) FROM accounts WHERE status = 'active') AS total_deposits_kes,
+    ROUND(
+        (SELECT SUM(principal_kes) FROM loans) /
+        (SELECT SUM(balance_ke) FROM accounts WHERE status = 'active') * 100,
+        2
+    ) AS ldr_ratio_pct
 
 
 -- ============================================================
@@ -113,7 +141,20 @@ having repayment_rate_pct <30
 -- Order by join_year, join_month ascending.
 -- Hint: COUNT with GROUP BY YEAR/MONTH + 
 --       SUM() OVER (ORDER BY year, month) for cumulative
-
+select 
+   join_year,
+   join_month,
+   new_members,
+   sum(new_members) over(order by join_year,join_month) as cumulative_total
+from (
+    select
+      year(join_date) as join_year,
+      month(join_date) as join_month,
+      count(*) as new_members
+    from members
+    group by year(join_date),month(join_date)
+)as monthly_members
+order by join_year,join_month;
 
 -- ============================================================
 -- BONUS: OFFICER ACTIVITY AUDIT
@@ -123,7 +164,14 @@ having repayment_rate_pct <30
 -- Display: officer full_name, total_transactions_processed, 
 --          total_amount_processed_kes
 -- Order by total_transactions_processed descending.
-
+select members.full_name as officer_full_name,
+       count(transactions.transaction_id) as total_transactions_processed,
+       sum(transactions.amount_kes) as total_amount_processed_kes
+from transactions
+join members on transactions.processed_by = members.member_id
+group by members.member_id, members.full_name
+order by total_transactions_processed desc;
+      
 
 -- ============================================================
 -- END OF QUESTIONS
